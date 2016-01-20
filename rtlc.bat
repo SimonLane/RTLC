@@ -5,4 +5,4 @@ set PYTHONHOME=%RTLCHOME%\vendor\Python27
 set PATH=%PYTHONHOME%;%PATH%
 
 cd %RTLCDIST%
-start python.exe LeicaDriver5.py
+start pythonw.exe LeicaDriver5.py
