@@ -44,7 +44,7 @@ license v2
  - PyQT, distributed under the GNU General Public License v3
  - NumPy, distributed under the BSD License
  - Python Image Library, distributed under its own license
-These licenses are available in the RTLC\licenses directory.
+These licenses are available in the RTLC\third-party-licenses directory.
 
 This product includes software written by Eric Young 
 (eay@cryptsoft.com)
