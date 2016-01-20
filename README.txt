@@ -24,6 +24,12 @@ installations of these packages you may have.
 The installer was created using the Nullsoft Installer System
 (NSIS) v3.0b3.
 
+You can find the source code for RTLC in the RTLC\dist
+directory.
+
+This software is distributed under the GNU General Public
+License v3, a copy of which can be found in RTLC\LICENSE.txt.
+
 Installation
 ------------
 

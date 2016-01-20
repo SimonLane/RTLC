@@ -73,7 +73,8 @@ Section
 	# RTLC
 	createDirectory "$SMPROGRAMS\${MUI_PRODUCT}"	
 	createShortCut "$SMPROGRAMS\${MUI_PRODUCT}\RTLC.lnk" "$INSTDIR\rtlc.bat" "" "$INSTDIR\rtlc.ico"
-		
+	createShortCut "$SMPROGRAMS\${MUI_PRODUCT}\README.lnk" "$INSTDIR\README.txt"
+
 	# Uninstaller
 	writeUninstaller "$INSTDIR\rtlc-uninstall.exe"
 	createShortCut "$SMPROGRAMS\${MUI_PRODUCT}\Uninstall.lnk" '"$INSTDIR\rtlc-uninstall.exe"'
