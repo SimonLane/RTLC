@@ -84,6 +84,7 @@ Section "uninstall"
 	
 	# Clean up Start Menu
 	delete "$SMPROGRAMS\${MUI_PRODUCT}\RTLC.lnk"
+	delete "$SMPROGRAMS\${MUI_PRODUCT}\README.lnk"
 	delete "$SMPROGRAMS\${MUI_PRODUCT}\Uninstall.lnk"
 	rmDir "$SMPROGRAMS\${MUI_PRODUCT}"
 	
