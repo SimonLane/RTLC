@@ -1,25 +1,39 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
+
+import ConfigParser
 import              sys, math, time, datetime, shutil, numpy, threading
 from PyQt4          import QtGui, QtCore
 from PyQt4.QtGui    import QImage, QPixmap, QLabel
 from PIL            import Image, ImageFilter, ImageDraw
 from functools      import partial
 
-from snaketest2     import *
-from testimage3     import *
+from ConfocalInterface  import *
+from ImageProcessing    import *
+from Configuration      import *
 
 smallDelay          = 0.1
 bigDelay            = 0.5
 
-class LeicaDriver(QtGui.QMainWindow):
+class ResponsiveTimelapseController(QtGui.QMainWindow):
     
     def __init__(self):
-        super(LeicaDriver, self).__init__()
+        super(ResponsiveTimelapseController, self).__init__()
         self.experimentSTOP = True
         self.experimentPAUSE = False
         self.experiment_reloaded = False
         self.oilEscape = False
+        self.User_root           = ''
+        self.Confocal_output     = ''
+        self.Laser1 = '488'
+        self.Laser2 = '515'
+        self.Laser3 = '594'
+        self.Laser_limit = '2'
+        self.Setup_job = 'SetupScan'
+        self.Overview_job = 'OverviewScan'
+        self.Zoom_job = 'ZoomScan'
+        self.Laser_assignment_error = False
+        load_config(self)
         self.initUI()
         
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -29,9 +43,9 @@ class LeicaDriver(QtGui.QMainWindow):
         screen       =  QtGui.QApplication.desktop().screenGeometry().getCoords()
         screenHeight = screen[-1]
         screenWidth  = screen[-2]
-        self.setGeometry(screenWidth-603, 30, 600, screenHeight-80)
-        self.setWindowTitle('LeicaDriver')
-        self.setWindowIcon(QtGui.QIcon('web.png'))
+        self.setGeometry(screenWidth-680, 30, 600, screenHeight-80)
+        self.setWindowTitle('Responsive Timelapse Controller')
+        self.setWindowIcon(QtGui.QIcon('RTC.png'))
         palette = QtGui.QPalette()
         palette.setColor(QtGui.QPalette.Background, QtGui.QColor(80,80,80))
         self.setPalette(palette)
@@ -40,19 +54,19 @@ class LeicaDriver(QtGui.QMainWindow):
                #Setup Widgets
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~        
         #start/pause & stop buttons
-        self.startpause         = QtGui.QPushButton('Start')
+        self.startpause                     = QtGui.QPushButton('Start')
         self.startpause.setCheckable(True)
-        self.startpause.state   = 0
+        self.startpause.state               = 0
         self.startpause.clicked[bool].connect(partial(self.control_main_loop,action='Start'))
-        self.stopbutton         = QtGui.QPushButton('Stop')
+        self.stopbutton                     = QtGui.QPushButton('Stop')
         self.stopbutton.clicked[bool].connect(partial(self.control_main_loop,action='Stop'))
         #timing widgets
-        self.TimingLabel1       = QtGui.QLabel('No. Loops:')
-        self.TimingLoops        = QtGui.QLineEdit('180')
-        self.TimingLabel2       = QtGui.QLabel('Interval (s):')
-        self.TimingInterval     = QtGui.QLineEdit('300')
-        self.TimingLabel3       = QtGui.QLabel('Duration')
-        self.TimingDuration     = QtGui.QLineEdit('15 : 00 : 00')
+        self.TimingLabel1                   = QtGui.QLabel('No. Loops:')
+        self.TimingLoops                    = QtGui.QLineEdit('180')
+        self.TimingLabel2                   = QtGui.QLabel('Interval (s):')
+        self.TimingInterval                 = QtGui.QLineEdit('300')
+        self.TimingLabel3                   = QtGui.QLabel('Duration')
+        self.TimingDuration                 = QtGui.QLineEdit('15 : 00 : 00')
         self.TimingDuration.setReadOnly(True)
         self.TimingLoops.returnPressed.connect(self.update_duration)
         self.TimingLoops.textChanged.connect(self.update_duration)
@@ -60,23 +74,24 @@ class LeicaDriver(QtGui.QMainWindow):
         self.TimingInterval.textChanged.connect(self.update_duration)
 
         #Fileing Widgets
-        self.FileRestore        = QtGui.QPushButton('Load Experiment')
+        self.FileRestore                    = QtGui.QPushButton('Load Experiment')
         self.FileRestore.clicked[bool].connect(self.restore_experiment)
-        self.FileUserLabel      = QtGui.QLabel('User:')
-        self.FileUserList       = QtGui.QComboBox()
+        self.FileUserLabel                  = QtGui.QLabel('User:')
+        self.FileUserList                   = QtGui.QComboBox()
         #generate user list
         
-        userList =  glob.glob('D:\\Experiments\\*')
+        userList =  glob.glob(self.User_root + '\\*')                                                  #RELPATH!!!
         for item in userList:
             if os.path.isdir(item):
                 userName = item.split('\\')[-1]
                 self.FileUserList.addItem(userName)
-        self.FileExptNameLabel  = QtGui.QLabel('Experiment Title:')
-        self.FileExptName       = QtGui.QLineEdit('')
+        self.FileExptNameLabel              = QtGui.QLabel('Experiment Title:')
+        self.FileExptName                   = QtGui.QLineEdit('')
         self.FileExptName.returnPressed.connect(self.update_expt_name)
         self.FileExptName.textChanged.connect(self.update_expt_name)
         self.FileUserList.currentIndexChanged['QString'].connect(self.update_expt_name)
-        self.FileAddress        = QtGui.QLineEdit('')
+#TO DO - Remove this 'FileAddress' from the GUI and instead add it to the 'info' window. Note that the FileAddress.text() is used to get the location to store images, so will need new variable instead.
+        self.FileAddress                    = QtGui.QLineEdit('')
         self.FileAddress.setReadOnly(True)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -84,25 +99,28 @@ class LeicaDriver(QtGui.QMainWindow):
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         
         #info/instruction prompt
-        self.TrackingOnOff      = QtGui.QCheckBox('H2B Tracking?')
-        self.TrackingLabel      = QtGui.QLabel("Channel:")
-        self.TrackingChannel    = QtGui.QLineEdit('')
+        self.TrackingLabel1                 = QtGui.QLabel("Tracking:")
+        self.TrackingLaserOff               = QtGui.QRadioButton("OFF")
+        self.TrackingLaser1                 = QtGui.QRadioButton(self.Laser1)
+        self.TrackingLaser2                 = QtGui.QRadioButton(self.Laser2)
+        self.TrackingLaser3                 = QtGui.QRadioButton(self.Laser3)
+        self.TrackingLabel2                 = QtGui.QLabel("Channel:")
+        self.TrackingAdjustOnOff            = QtGui.QCheckBox('Auto-Adjust?')        
+        self.TrackingChannel                = QtGui.QLineEdit('2')
         self.TrackingChannel.setMaxLength(1)
-        self.TrackingLaserAdjust      = QtGui.QCheckBox('Auto-Adjust 594?')
-        self.TrackingOV         = QtGui.QCheckBox('Auto-Focus OV?')
-        self.TrackingOnOff.toggle()
-        self.TrackingOV.toggle()
+        self.TrackingOV                     = QtGui.QCheckBox('Auto-Focus OV?')
+        self.TrackingLaserOff.toggle()
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                #Information Widget
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         
         #info/instruction prompt
-        self.InfoModel          = QtGui.QStandardItemModel()
+        self.InfoModel                      = QtGui.QStandardItemModel()
         self.InfoModel.setHorizontalHeaderLabels([self.tr("Title"),self.tr("Info")])
         self.InfoModel.setRowCount(5)
         self.InfoModel.setColumnCount(2)
-        self.InfoTree           = QtGui.QTreeView(self)
+        self.InfoTree                       = QtGui.QTreeView(self)
         self.InfoTree.setFixedHeight(160)
         self.InfoTree.setModel(self.InfoModel)
         self.InfoTree.setHeaderHidden(True)
@@ -132,7 +150,7 @@ class LeicaDriver(QtGui.QMainWindow):
         self.PrevOVGreen.stateChanged.connect(lambda: self.change_image_state('OV','Green'))
         self.PrevOVBlue.stateChanged.connect(lambda: self.change_image_state('OV','Blue'))
             #OV Image
-        self.PrevOVFileName                 = 'Blank.tif'
+        self.PrevOVFileName                 = 'Blank.tif'                                              #RELPATH!!!
         self.PrevOVImage                    = QtGui.QImage(self.PrevOVFileName)
         self.PrevOVpixmap                   = QtGui.QPixmap(self.PrevOVImage)
         self.PrevOVlabel                    = QtGui.QLabel()
@@ -145,7 +163,6 @@ class LeicaDriver(QtGui.QMainWindow):
         self.PrevOverlaylabel.mousePressEvent   = self.get_click_position
         self.PrevOverlayimage_clickable         = False
         
-
         #Current Image
             #RGB options
         self.PrevCurrRed      = QtGui.QCheckBox('R')
@@ -159,15 +176,13 @@ class LeicaDriver(QtGui.QMainWindow):
         self.PrevCurrBlue.stateChanged.connect(lambda: self.change_image_state('Curr','Blue'))
 
             #Image
-        self.PrevCurrFileName           = 'Blank.tif'
+        self.PrevCurrFileName           = 'Blank.tif'                                          #RELPATH!!!
         self.PrevCurrImage              = QtGui.QImage(self.PrevCurrFileName)
         self.PrevCurrpixmap             = QtGui.QPixmap(self.PrevCurrImage)
         self.PrevCurrlabel              = QtGui.QLabel()
         self.PrevCurrlabel.setPixmap(self.PrevCurrpixmap)
         self.PrevCurrimage_clickable    = False
 
-        
-        
         #Image labels
         self.PrevOVInfoLabel            = QtGui.QLabel('')
         self.PrevCurrInfoLabel          = QtGui.QLabel('')
@@ -194,7 +209,7 @@ class LeicaDriver(QtGui.QMainWindow):
         
         #Create Model
         self.model      = QtGui.QStandardItemModel()
-        self.model.setHorizontalHeaderLabels([self.tr("Scan"),self.tr("Job"),self.tr("X"),self.tr("Y"),self.tr("Z"),self.tr("Loops"),self.tr("488"),self.tr("514"),self.tr("594"),self.tr("Pinhole")])
+        self.model.setHorizontalHeaderLabels([self.tr("Scan"),self.tr("Job"),self.tr("X"),self.tr("Y"),self.tr("Z"),self.tr("Loops"),self.tr(self.Laser1),self.tr(self.Laser2),self.tr(self.Laser3),self.tr("Pinhole")])
 
         #Create Tree
         self.tree       = QtGui.QTreeView(self)
@@ -234,14 +249,18 @@ class LeicaDriver(QtGui.QMainWindow):
         self.FileGroup.layout().addWidget(self.FileAddress,          3,0,1,2)
 
         #Tracking Pane
-        self.TrackingGroup = QtGui.QGroupBox('Chromosome Tracking')
         
+        self.TrackingGroup = QtGui.QGroupBox('Chromosome Tracking')
         self.TrackingGroup.setLayout(QtGui.QGridLayout())
-        self.TrackingGroup.layout().addWidget(self.TrackingOnOff,    0,0)
-        self.TrackingGroup.layout().addWidget(self.TrackingLabel,    1,0)
-        self.TrackingGroup.layout().addWidget(self.TrackingChannel,  1,1)
-        self.TrackingGroup.layout().addWidget(self.TrackingLaserAdjust,  2,0)
-        self.TrackingGroup.layout().addWidget(self.TrackingOV,       3,0)
+        self.TrackingGroup.layout().addWidget(self.TrackingLabel1,      0,0)
+        self.TrackingGroup.layout().addWidget(self.TrackingLaserOff,    0,1)
+        self.TrackingGroup.layout().addWidget(self.TrackingLaser1,      0,2)
+        self.TrackingGroup.layout().addWidget(self.TrackingLaser2,      0,3)
+        self.TrackingGroup.layout().addWidget(self.TrackingLaser3,      0,4)
+        self.TrackingGroup.layout().addWidget(self.TrackingLabel2,      1,0,1,2)
+        self.TrackingGroup.layout().addWidget(self.TrackingChannel,     1,2,1,1)
+        self.TrackingGroup.layout().addWidget(self.TrackingAdjustOnOff, 2,0,1,4)
+        self.TrackingGroup.layout().addWidget(self.TrackingOV,          3,0,1,4)
  
         #Overall Settings pane
         self.SettingGroup = QtGui.QGroupBox('Settings')
@@ -355,11 +374,26 @@ class LeicaDriver(QtGui.QMainWindow):
                 self.update_info(3,1,"No scans have been added!\nClick 'Setup Scan' to begin")
                 Ready = False
             #_____Tracking channel correct?
-            if self.TrackingOnOff.checkState()==2 and not self.isInt(self.TrackingChannel.text()):
+            if not self.TrackingLaserOff.isChecked() and not self.isInt(self.TrackingChannel.text()):
                 self.update_info(3,1,'Chromosome tracking requires tracking channel to be entered!')
                 Ready = False
-            if self.TrackingLaserAdjust.checkState()==2 and not self.isInt(self.TrackingChannel.text()):
+            if self.TrackingAdjustOnOff.checkState()==2 and not self.isInt(self.TrackingChannel.text()):
                 self.update_info(3,1,'Laser Adjustment requires tracking channel to be entered.')
+                Ready = False
+            #_____Lasers wavelengths actually exist
+            if self.Laser_assignment_error == True:
+                Ready = False
+            #_____jobs to be used actually available as records in Matrix Screener?
+            socket = open_socket()
+            joblist =  getjoblist(socket)
+            socket = close_socket(socket)
+            if joblist.find(self.Overview_job)==-1:
+                print "Job not found: ", self.Overview_job
+                self.update_info(3,1,"The job '%s' was not found in the matrix screener list of jobs. \n Check the spelling in the config file. \n Check the job is loaded as a record in matrix screener." %(self.Overview_job))
+                Ready = False
+            if joblist.find(self.Zoom_job)==-1:
+                print "Job not found: ", self.Zoom_job
+                self.update_info(3,1,"The job '%s' was not found in the matrix screener list of jobs. \n Check the spelling in the config file. \n Check the job is loaded as a record in matrix screener." %(self.Zoom_job))
                 Ready = False
                 
             if Ready==True: 
@@ -468,51 +502,43 @@ class LeicaDriver(QtGui.QMainWindow):
                 #Pause and Stop~~~~~~~~~~~~~~
 
                 with self.lock:
-                    #print 'A locked', time.time()
                     self.pickle_model()
-                    #print 'A1'
                     do_this_scan = self.model.item(i,0).checkState()
-                    #print 'A2'
                     if do_this_scan==2:
-                        #print 'A3'
                         self.update_info(4,1,'Scan setup...')
-                        #print 'A4'
                         #colour current imaging row
                         for r in range(self.model.rowCount()):
                             self.model.item(r,1).setBackground(QtGui.QColor(255,255,255))
                         self.model.item(i,1).setBackground(QtGui.QColor(200,200,255))
                         #Setup Scan~~~~~~~~~~~~~~~~~~
-                        #print 'A5'
                         #grab current xyz values                    
                         x   = self.model.item(i,2).text()
                         y   = self.model.item(i,3).text()
                         z   = self.model.item(i,4).text()
                         job = self.model.item(i,1).text()
-                        #print 'A6'
-                        assign_job(job,socket)
-                        #print 'A7'
-                        self.apply_settings(job,socket,i) #model access
-                    #print 'A unlocked', time.time()
+                        if(job=="OV"):
+                            assign_job(self.Overview_job,socket)
+                            self.apply_settings(self.Overview_job,socket,i) #model access
+                        if(job=="zoom"):
+                            assign_job(self.Zoom_job,socket)
+                            self.apply_settings(self.Zoom_job,socket,i) #model access
                     
                 if do_this_scan==2:        
                     set_XYZ(x,y,z,socket)
                     self.update_info(1,1,'%s of %s (%s)' %(i+1,number_of_scans,job))
                     
                     #Start Scan~~~~~~~~~~~~~~~~~~
-                    #print 'A scanning', time.time()
                     start_scan(socket)
                     self.update_info(4,1,'Scanning...')
                     # -TO DO- append scan information to log file
                     time.sleep(smallDelay)
-                    folderLocation = get_scan_finish(socket)
+                    folderLocation = get_scan_finish(self,socket)
                     self.update_info(4,1,'Scan Complete')
                     check_confocal_ready(socket) #causes suffient delay to stop confocal skipping commands
-                    #print 'A scanning end', time.time()
                     
                     #Add job to processing queue ~~~~~~~~~~~~~~~~~~
                     self.update_info(4,1,'Processing image files...')
-                    #print 'A start processing thread', time.time()
-                    self.AnalysisThread      = threading.Thread(target=self.image_processing, args=(folderLocation, self.tracking_channel,i,self.completed_loops, job))
+                    self.AnalysisThread      = threading.Thread(target=self.image_processing, args=(folderLocation,i,self.completed_loops, job))
                     self.AnalysisThread.start()
                     
                     time.sleep(smallDelay)
@@ -539,13 +565,12 @@ class LeicaDriver(QtGui.QMainWindow):
 #                       IMAGE PROCESSING                        #
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
-    def image_processing(self, folderLocation, trackingChannel, scan_number, loop_number, job):
-        # !! This function operates in a separte thread !!
-
-            #print 'B picked up job', time.time()    
+    def image_processing(self, folderLocation, scan_number, loop_number, job):
+        # !! This function operates in a separate thread !!
 
             #get vital information about job
-            voxelx, voxelz, zoom, L488, L514, L594, pinhole     = get_info_from_metadata(folderLocation)
+            voxelx, voxelz, zoom, L1, L2, L3, pinhole     = get_info_from_metadata(self,folderLocation)
+            print "From metadata: \t\t",voxelx, voxelz, zoom, L1, L2, L3, pinhole
             Cs, Zs, sizex, sizey                                = incoming_image_format(folderLocation)
 
             time.sleep(2) #IMPORTANT
@@ -553,15 +578,14 @@ class LeicaDriver(QtGui.QMainWindow):
 
             #lock
             with self.lock:
-                #print 'B locked', time.time()
                 #process job
                 if job == 'zoom':
-                    if self.TrackingOnOff.checkState()==2:
-                        tracking_channel_name                       = 'C0%s' %str(int(trackingChannel)-1)
+                    if not self.TrackingLaserOff.isChecked():
+                        tracking_channel_name                       = 'C0%s' %str(int(self.tracking_channel)-1)
                         COMx,COMy,COMz                              = find_COM(folderLocation, tracking_channel_name)
                         
                         dY = (COMx-(sizex/2))*voxelx        #   Deliberate swap of X and Y to counter
-                        dX = (COMy-(sizey/2))*voxelx        #   Leica's backwards stage control
+                        dX = (COMy-(sizey/2))*voxelx        #   Leica's reversed stage control
                         dZ = (COMz-(Zs/2))*voxelz
                         distance_score = math.sqrt(math.pow(dX,2)+math.pow(dY,2)+math.pow(dZ,2))
                         if distance_score>15:
@@ -569,9 +593,9 @@ class LeicaDriver(QtGui.QMainWindow):
                         if distance_score<15:
                             bg_col = QtGui.QColor(255,126,0)
                         if distance_score<10:
-                            bg_col = QtGui.QColor(255,255,0)
+                            bg_col = QtGui.QColor(255,205,0)
                         if distance_score<5:
-                            bg_col = QtGui.QColor(126,255,0)
+                            bg_col = QtGui.QColor(166,255,0)
                         if distance_score<2:
                             bg_col = QtGui.QColor(0,255,0)
                         
@@ -583,9 +607,14 @@ class LeicaDriver(QtGui.QMainWindow):
                         self.model.item(scan_number,3).setText("%.2f"%Y)
                         self.model.item(scan_number,4).setText("%.2f"%Z)
                         
-                    if self.TrackingLaserAdjust.checkState()==2:
-                        #Make adjustment if too many pixels are saturated, or image is too dark
-                        L594 = self.laserAdjust(folderLocation, tracking_channel_name, L594)
+                    #Make adjustment if too many pixels are saturated, or image is too dark
+                    if self.TrackingAdjustOnOff.isChecked():
+                        if self.TrackingLaser1.isChecked():
+                            L1 = self.laserAdjust(folderLocation, tracking_channel_name, L1)
+                        if self.TrackingLaser2.isChecked():    
+                            L2 = self.laserAdjust(folderLocation, tracking_channel_name, L2)
+                        if self.TrackingLaser3.isChecked():    
+                            L3 = self.laserAdjust(folderLocation, tracking_channel_name, L3)
                         
                 if job == 'OV':
                     if self.TrackingOV.checkState()==2:
@@ -612,15 +641,13 @@ class LeicaDriver(QtGui.QMainWindow):
                         self.model.item(scan_number,4).setText("%.2f"%Z)
                         
                 #set data back to model
-                self.model.item(scan_number,6).setText("%.1f"%L488)
-                self.model.item(scan_number,7).setText("%.1f"%L514)
-                self.model.item(scan_number,8).setText("%.1f"%L594)
+                self.model.item(scan_number,6).setText("%.1f"%L1)
+                self.model.item(scan_number,7).setText("%.1f"%L2)
+                self.model.item(scan_number,8).setText("%.1f"%L3)
                 self.model.item(scan_number,9).setText("%.1f"%float(pinhole))
                 self.model.item(scan_number,5).setText("%s"%(int(loop_number)+1))
-
             #unlock
-            #print 'B unlocked', time.time()
-            
+
             #Build preview
             try:
                 preview_location = build_preview(folderLocation, Cs, scan_number+1)
@@ -644,12 +671,15 @@ class LeicaDriver(QtGui.QMainWindow):
         z   = self.model.item(i,4).text()
         job = self.model.item(i,1).text()
         socket = open_socket()
-        assign_job(job,socket)
+        if(job=="OV"): job_name = self.Overview_job
+        if(job=="zoom"): job_name = self.Zoom_job
+        assign_job(job_name,socket)
         if self.model.item(i,6).text() != 'default':
-            self.apply_settings(job,socket,i)
+            self.apply_settings(job_name,socket,i)
         set_XYZ(x,y,z,socket)
         close_socket(socket)
-
+#TO DO - implement function to allow replacement of oil without having to disturb imaging dish. Move  
+#        objective to a lower position, then to the side so it is accessable to the oil dropper.
 ##    def oil_escape():
 ##        if self.oilEscape == True:
 ##            #return to position
@@ -681,9 +711,13 @@ class LeicaDriver(QtGui.QMainWindow):
         if r==3:
             self.InfoModel.item(3,1).setBackground(QtGui.QColor(255,0,0))
 
+    def report_error(self, error_msg):
+        self.InfoModel.item(3,1).setText("%s"%error_msg)
+        self.InfoModel.item(3,1).setBackground(QtGui.QColor(255,0,0))
+            
 #Automatic laser power adjustment
     def laserAdjust(self, folderLocation, tracking_channel_name, laser_power):
-        laser_limit = 2
+        laser_limit = 2                                                                                     #To add to Config file
         tifList =  glob.glob(folderLocation + '/*.tif')
         high_pixels = 0
         low_pixels = 0
@@ -700,7 +734,7 @@ class LeicaDriver(QtGui.QMainWindow):
         low_pixels      = float(low_pixels)/total_pixels*100
         good_pixels     = float(good_pixels)/total_pixels*100
         new_laser_power = laser_power
-        if (high_pixels/(good_pixels+0.0000001))<0.01 and laser_power<laser_limit:
+        if (high_pixels/(good_pixels+0.0000001))<0.01 and laser_power<self.Laser_limit:
             new_laser_power = laser_power + 0.1
         else:
             new_laser_power = round((1-(high_pixels/(good_pixels+0.0000001)))*laser_power*10)/10
@@ -709,7 +743,7 @@ class LeicaDriver(QtGui.QMainWindow):
         
 #Preview Image functions
     def clear_preview_images(self):
-        junkList =  glob.glob('C:\\Users\\Administrator\\Documents\\Simon_Python\\Scan*.tif')
+        junkList =  glob.glob('Scans\\Scan*.tif')       #RELPATH!!!
         for image in junkList:
             os.remove(image)
 
@@ -737,21 +771,21 @@ class LeicaDriver(QtGui.QMainWindow):
             if destination == 'OV':
                 im = Image.open(self.PrevOVFileName)
                 im = self.do_colours(im, self.OVRed, self.OVGreen, self.OVBlue)
-                im.save('tempOV.tif',"TIFF")
-                self.PrevOVImage = QtGui.QImage('tempOV.tif')
+                im.save('Scans\\tempOV.tif',"TIFF")                                              #RELPATH!!!
+                self.PrevOVImage = QtGui.QImage('Scans\\tempOV.tif')                             #RELPATH!!!
                 self.PrevOVpixmap = QtGui.QPixmap(self.PrevOVImage)
                 self.PrevOVlabel.setPixmap(self.PrevOVpixmap)
 
             if destination == 'Curr':
                 im = Image.open(self.PrevCurrFileName)
                 im = self.do_colours(im, self.CurrRed, self.CurrGreen, self.CurrBlue)
-                im.save('tempCurr.tif',"TIFF")
-                self.PrevCurrImage = QtGui.QImage('tempCurr.tif')
+                im.save('Scans\\tempCurr.tif',"TIFF")                                             #RELPATH!!!
+                self.PrevCurrImage = QtGui.QImage('Scans\\tempCurr.tif')                         #RELPATH!!!
                 self.PrevCurrpixmap = QtGui.QPixmap(self.PrevCurrImage)
                 self.PrevCurrlabel.setPixmap(self.PrevCurrpixmap)
 
             if destination == 'Overlay':
-                self.PrevOverlayImage = QtGui.QImage('overlay.png')
+                self.PrevOverlayImage = QtGui.QImage('overlay.png')                         #RELPATH!!!
                 self.PrevOverlaypixmap = QtGui.QPixmap(self.PrevOverlayImage)
                 self.PrevOverlaylabel.setPixmap(self.PrevOverlaypixmap)
         except:
@@ -768,13 +802,13 @@ class LeicaDriver(QtGui.QMainWindow):
         if self.model.item(scan-1,5).text()=='0':
             print 'Image not available'
         else:
-            self.PrevCurrFileName = 'Scan%s.tif' %scan
+            self.PrevCurrFileName = 'Scans\\Scan%s.tif' %scan                                    #RELPATH!!!
             #get corresponding overview
             OV_scan_number, OV_loop_number = self.find_overview(scan)
             #get voxel size
             if OV_scan_number !=-1:
                 dest_folder = ('%s\\%02d-%s\\t%03d') %(self.FileAddress.text(),int(OV_scan_number)-1,'OV',int(OV_loop_number)-1)
-                voxelx, voxelz, zoom, L488, L514, L594, pinhole = get_info_from_metadata(dest_folder)
+                voxelx, voxelz, zoom, L1, L2, L3, pinhole = get_info_from_metadata(self,dest_folder)
                 with self.lock:
                     OV_x = float(self.model.item(OV_scan_number-1,2).text())
                     OV_y = float(self.model.item(OV_scan_number-1,3).text())
@@ -787,7 +821,7 @@ class LeicaDriver(QtGui.QMainWindow):
                     self.build_overlay(scan_x, scan_y, OV_x, OV_y, voxelx, 512) #TO DO!! get OV image size, don't assume 512
             
             if OV_scan_number != -1:
-                self.PrevOVFileName = 'Scan%s.tif' %OV_scan_number
+                self.PrevOVFileName = 'Scans\\Scan%s.tif' %OV_scan_number                             #RELPATH!!!
                 self.update_preview_image('OV')
                 self.PrevOVInfoLabel.setText('Scan: %s, Loop: %s' %(OV_scan_number,timepoint))
                 self.update_preview_image('Overlay')
@@ -816,7 +850,7 @@ class LeicaDriver(QtGui.QMainWindow):
         del draw
         overlay = Image.new("L", (256,256), (256))
         overlay.putalpha(mask)
-        overlay.save('overlay.png',"PNG")
+        overlay.save('overlay.png',"PNG")                             #RELPATH!!!
 
     def find_overview(self, scan_number):
         scan_number = scan_number-1
@@ -831,7 +865,7 @@ class LeicaDriver(QtGui.QMainWindow):
     def do_colours(self, im, R, G, B):
         im = im.resize((256,256))
         r,g,b = im.split()
-        e = Image.open('empty.tif')
+        e = Image.open('empty.tif')                             #RELPATH!!!
         if not R:
             r=e
         if not G:
@@ -844,16 +878,18 @@ class LeicaDriver(QtGui.QMainWindow):
     def apply_settings(self, job, socket, scan_number):
         if self.model.item(scan_number,6).text() != 'default':
             columns         = [6,7,8,9]
-            command_start   = ['laser:488:','&laser:514:','&laser:594:','&pinhole:']
-            command = ''
-            k=0
-            for c in columns:
-                value = self.model.item(scan_number,c).text()
-                command = command + command_start[k] + value
-                k=k+1
+            command = 'laser:%s:%s&laser:%s:%s&laser:%s:%s&pinhole:%s' %(self.Laser1,self.model.item(scan_number,6).text(),self.Laser2,self.model.item(scan_number,7).text(),self.Laser3,self.model.item(scan_number,8).text(),self.model.item(scan_number,9).text())
             adjust_job(job,command,socket)
 
     def do_setup_scan(self):
+        socket = open_socket()
+        joblist =  getjoblist(socket)
+        close_socket(socket)
+        if joblist.find(self.Setup_job)==-1:
+            print "Job not found:", self.Setup_job
+            self.update_info(3,1,"The job '%s' was not found in the matrix screener list of jobs. \n Check the spelling in the config file. \n Check the job is loaded as a record in matrix screener.\nRestart RTC." %(self.Setup_job))
+            return    
+                
         self.update_info(4,1,'Performing setup scan, please wait...')
         #inactivate rest of GUI
         self.SettingGroup.setEnabled(False)
@@ -862,17 +898,16 @@ class LeicaDriver(QtGui.QMainWindow):
         
         #Do the scan based on current position
         socket = open_socket()
-        print 'setup scan...'
         self.curr_stage_position =  get_XYZ(socket)                             # X, Y, Z
-        assign_job('setup',socket)
+        assign_job(self.Setup_job,socket)
         set_XYZ(self.curr_stage_position[0],self.curr_stage_position[1],self.curr_stage_position[2],socket)
         start_scan(socket)
-        self.curr_folderLocation = get_scan_finish(socket)
+        self.curr_folderLocation = get_scan_finish(self, socket)
         self.curr_image_info = incoming_image_format(self.curr_folderLocation)  #Cs, Zs, sizex, sizey
-        self.curr_scan_info = get_info_from_metadata(self.curr_folderLocation)  #voxelx, voxelz, zoom
+        self.curr_scan_info = get_info_from_metadata(self,self.curr_folderLocation)  #voxelx, voxelz, zoom
         filename = self.model.rowCount()+1
         preview_location = build_preview(self.curr_folderLocation, self.curr_image_info[0], filename)
-
+        print preview_location
         #Display the z-projection
         self.PrevOVFileName = preview_location
         self.update_preview_image('OV')
@@ -934,11 +969,11 @@ class LeicaDriver(QtGui.QMainWindow):
         enable.setCheckable(True)
         enable.setCheckState(QtCore.Qt.Checked)
         loops       = QtGui.QStandardItem('0')
-        L488        = QtGui.QStandardItem("%s" %'default')
-        L514        = QtGui.QStandardItem("%s" %'default')
-        L594        = QtGui.QStandardItem("%s" %'default')
+        L1        = QtGui.QStandardItem("%s" %'default')
+        L2        = QtGui.QStandardItem("%s" %'default')
+        L3        = QtGui.QStandardItem("%s" %'default')
         pinhole     = QtGui.QStandardItem("%s" %'default')
-        self.model.appendRow([enable,job,x,y,z,loops,L488,L514,L594,pinhole])
+        self.model.appendRow([enable,job,x,y,z,loops,L1,L2,L3,pinhole])
         for c in range(10):
             self.tree.resizeColumnToContents(c)
                 
@@ -963,16 +998,16 @@ class LeicaDriver(QtGui.QMainWindow):
         UserName    = self.FileUserList.currentText()
         ExptName    = self.FileExptName.text()
         startdate   = datetime.date.today()
-        rootLocation = 'D:\\Experiments'
+
         if len(ExptName)>0:
             ExptName = ' (%s)' %(ExptName)
         i=0
         while True:
             i=i+1
             if i==1:
-                StoreLocation = '%s\\%s\\%s%s' %(rootLocation,UserName,startdate,ExptName)
+                StoreLocation = '%s\\%s\\%s%s' %(self.User_root,UserName,startdate,ExptName)
             else:
-                StoreLocation = '%s\\%s\\%s (%s)%s' %(rootLocation,UserName,startdate,i,ExptName)
+                StoreLocation = '%s\\%s\\%s (%s)%s' %(self.User_root,UserName,startdate,i,ExptName)
             if not os.path.exists(StoreLocation):
                 self.FileAddress.setText(StoreLocation)
                 break
@@ -1011,12 +1046,12 @@ class LeicaDriver(QtGui.QMainWindow):
                 to_store.append(self.model.item(r,c).text())
 
         #pickle
-        address = '%s\\expt_restore.p' %self.FileAddress.text()
+        address = '%s\\expt_restore.p' %self.FileAddress.text()                             #RELPATH!!!
         pickle.dump(to_store, open(address, 'wb'))
 
     def restore_experiment(self):
         UserName    = self.FileUserList.currentText()
-        basic_dir = 'D:\\Experiments\%s\\' %UserName
+        basic_dir = '%s\\%s\\' %(self.User_root,UserName)                                         #RELPATH!!!
         address = QtGui.QFileDialog.getOpenFileName(self, 'Open File', basic_dir)
         print 'restoring experiment from: ',address
         to_restore = pickle.load(open(address, 'rb'))
@@ -1030,7 +1065,7 @@ class LeicaDriver(QtGui.QMainWindow):
         self.model.clear()
         self.model.setRowCount(rows)
         self.model.setColumnCount(cols)
-        self.model.setHorizontalHeaderLabels([self.tr("Scan"),self.tr("Job"),self.tr("X"),self.tr("Y"),self.tr("Z"),self.tr("Loops"),self.tr("488"),self.tr("514"),self.tr("594"),self.tr("Pinhole")])
+        self.model.setHorizontalHeaderLabels([self.tr("Scan"),self.tr("Job"),self.tr("X"),self.tr("Y"),self.tr("Z"),self.tr("Loops"),self.tr(self.Laser1),self.tr(self.Laser2),self.tr(self.Laser3),self.tr("Pinhole")])
 
         #insert data
         count = 4
@@ -1051,7 +1086,7 @@ class LeicaDriver(QtGui.QMainWindow):
     
 def main():
     app = QtGui.QApplication(sys.argv)
-    gui = LeicaDriver()
+    gui = ResponsiveTimelapseController()
     sys.exit(app.exec_())
 
 if __name__ == '__main__':

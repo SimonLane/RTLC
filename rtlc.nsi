@@ -28,7 +28,7 @@ InstallDir "C:\${MUI_PRODUCT}"
 !define MUI_PAGE_HEADER_TEXT "Responsive Timelapse Controller v${MUI_VERSION}"
 !define MUI_WELCOMEPAGE_TITLE "Responsive Timelapse Controller v${MUI_VERSION}"
 # TODO: add in description of the software below
-!define MUI_WELCOMEPAGE_TEXT "Welcome to the RTLC v${MUI_VERSION} ${MUI_VERSION_STR} installer $\r$\n $\r$\nThe Responsive Timelapse Controller (RTLC) is software that ...$\r$\n $\r$\n\
+!define MUI_WELCOMEPAGE_TEXT "Welcome to the RTLC v${MUI_VERSION} ${MUI_VERSION_STR} installer $\r$\n $\r$\nThe Responsive Timelapse Controller (RTLC) software interfaces with the Leica TCS SP8 Confocal microscope using the Computer Aided Microscopy (CAM) interface, and allows multi-position timelapse imaging.$\r$\n $\r$\n\
  This package will install RTLC on your system in the C:\RTLC directory."
 
 !define MUI_WELCOMEFINISHPAGE_BITMAP ".\rtlc-welcome-finish.bmp"
@@ -57,6 +57,7 @@ Section "install"
 	File /r "LICENSE.txt"
 	File /r "third-party-licenses"
 	File /r "README.txt"
+	File /r "AUTHORS.txt"
 	File /r "rtlc.bat"
 	File /r "rtlc.ico"
 	File /r "vendor\Python27-pyqt-numpy-pil.zip"

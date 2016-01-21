@@ -4,6 +4,10 @@ v0.1 Technology Preview
 Overview
 --------
 
+The Responsive Timelapse Controller (RTLC) software interfaces
+with the Leica TCS SP8 Confocal microscope using the Computer
+Aided Microscopy (CAM) interface, and allows multi-position
+timelapse imaging.
 
 Prerequisites
 -------------
@@ -54,8 +58,7 @@ These licenses are available in the RTLC\third-party-licenses directory.
 
 This product includes software written by Eric Young 
 (eay@cryptsoft.com)
-This product includes software written by Tim Hudson 
-(tjh@cryptsoft.com)
+This product includes software written by Tim Hudson (tjh@cryptsoft.com)
 
 Microscope image art used for installer and application icon files
 created by MedicalWP[1] and used under Creative Commons Attribution 
@@ -65,5 +68,4 @@ created by MedicalWP[1] and used under Creative Commons Attribution
 [2] http://creativecommons.org/licenses/by/4.0/
 
 ------------------------------------------------------------------
-Copyright (C) 2016 Simon Lane, Centre for Biological Sciences,
-University of Southampton, UK.
+Copyright (C) University of Southampton, UK.

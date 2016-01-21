@@ -1,8 +1,8 @@
 #!/usr/bin/env python
-import              socket, time, datetime, os, glob, thread, pickle
-from snaketest2     import find_COM, get_info_from_metadata, build_preview
-from PIL            import Image
-from PyQt4          import QtGui, QtCore
+import                      socket, time, datetime, os, glob, thread, pickle
+from ImageProcessing        import find_COM, get_info_from_metadata, build_preview
+from PIL                    import Image
+from PyQt4                  import QtGui, QtCore
 
 TrackingChannel = 0
 smallDelay      = 0.1
@@ -93,9 +93,7 @@ def adjust_job(job, cmnd,s):
             s.send(command)
         time.sleep(smallDelay)
 
-def get_scan_finish(s):
-    if standaloneMode:
-        return 'D/CAM_STORE/FromConfocal/experiment--2016_01_13_10_22_09'
+def get_scan_finish(self,s):
     clear_stream(s)
     time.sleep(bigDelay)
     while True:
@@ -104,24 +102,19 @@ def get_scan_finish(s):
             if data.find('relpath')>0:
                 a=data.find('/relpath:')
                 b=data.find('image--')
-                return 'D:\CAM_STORE\\'+data[a+9:b-1].strip()
+                return self.Confocal_out + '\\' + data[a+9:b-1].strip()
             if data.find('scanfinished')>0:
-                return get_file_location()
+                return get_file_location(self)
         except:
             pass
         time.sleep(0.2)
             
 def start_scan(s):
-    if standaloneMode:
-        return
     time.sleep(bigDelay)
     s.send("/cli: Simon /app:matrix /sys: 1 /cmd: startscan")
     
 def assign_job(jobname,s):
-    if standaloneMode:
-        return
     time.sleep(smallDelay)
-#    print 'hello', jobname
     s.send("/cli: Simon /app:matrix /sys: 1 /cmd: enableall /value:true")
     time.sleep(smallDelay)
     s.send("/cli: Simon /app:matrix /sys: 1 /cmd: selectallfields")
@@ -129,15 +122,11 @@ def assign_job(jobname,s):
     s.send("/cli: Simon /app:matrix /sys: 1 /cmd: assignjob /job:%s" %jobname)
     
 def set_XYZ(x,y,z,s):
-    if standaloneMode:
-        return
     time.sleep(smallDelay)
     command = "/cli: Simon /app:matrix /sys: 1 /cmd: adjustmatrix /startx: %s /starty: %s /startz: %s" %(x,y,z)
     s.send(command)
     
 def check_confocal_ready(s):
-    if standaloneMode:
-        return 'ready'
     command = "/cli: Simon /app:matrix /sys: 1 /cmd: getinfo /dev:scanstatus"
     s.send(command)
 #    clear_stream(s)
@@ -158,12 +147,12 @@ def check_confocal_ready(s):
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 #                   FILE HANDELING FUNCTIONS                    #
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-def current_datetime():
-    return datetime.datetime.now().strftime("D:\CAM_STORE\FromConfocal\Experiment--20%y_%m_%d_%H_%M_%S")
+def current_datetime(self):
+    return self.Confocal_out + datetime.datetime.now().strftime("\\Experiment--20%y_%m_%d_%H_%M_%S")
 
-def get_file_location():
+def get_file_location(self):
     #list all folders
-    folderList = glob.glob('D:\CAM_STORE\FromConfocal\Experiment--*')
+    folderList = glob.glob(self.Confocal_out + '\\Experiment--*')
     #return most recent folder
     return folderList[len(folderList)-1]
      
