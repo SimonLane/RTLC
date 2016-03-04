@@ -72,9 +72,9 @@ SectionEnd
 # Start Menu Entries
 Section	
 	# RTLC
-	createDirectory "$SMPROGRAMS\${MUI_PRODUCT}"	
+	createDirectory "$SMPROGRAMS\${MUI_PRODUCT}"
 	createShortCut "$SMPROGRAMS\${MUI_PRODUCT}\RTLC.lnk" "$INSTDIR\rtlc.bat" "" "$INSTDIR\rtlc.ico"
-	createShortCut "$SMPROGRAMS\${MUI_PRODUCT}\README.lnk" "$INSTDIR\README.txt"
+	createShortCut "$SMPROGRAMS\${MUI_PRODUCT}\README.lnk" "C:\Windows\System32\notepad.exe $INSTDIR\README.md"
 
 	# Uninstaller
 	writeUninstaller "$INSTDIR\rtlc-uninstall.exe"
