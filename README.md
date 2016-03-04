@@ -42,13 +42,12 @@ form.
 Obtaining the source code
 -------------------------
 
-1. Create a RTLC directory in the C drive of the machine.
-2. Clone the [RTLC repository](https://www.github.com/SimonLane/RTLC.git) 
-   within that directory.
-3. Unpack the C:\RTLC\vendor\Python27-pyqt-numpy-pil.zip file, ensuring that
+1. Clone the [RTLC repository](https://www.github.com/SimonLane/RTLC.git) 
+   in the C drive (i.e. C:\). This will create a C:\RTLC directory.
+2. Unpack the C:\RTLC\vendor\Python27-pyqt-numpy-pil.zip file, ensuring that
    the pythonw.exe file can be found within the C:\RTLC\vendor\Python27
    directory, and not within a further subdirectory.
-4. Run rtlc.bat from the C:\RTLC directory.
+3. Run rtlc.bat from the C:\RTLC directory.
 
 Installation through Installer
 ------------------------------
