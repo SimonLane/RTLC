@@ -1,7 +1,7 @@
 Responsive Timelapse Controller (RTLC)
 ======================================
+
 v0.1 Technology Preview
-=======================
 
 Overview
 --------
@@ -52,11 +52,12 @@ Other Notes
 
 The following packages are distributed with this software:
 
-- Python 2.7, distributed under the Python Software Foundation 
+- [Python 2.7](https://www.python.org/), distributed under the Python Software Foundation 
 license v2
-- PyQT, distributed under the GNU General Public License v3
-- NumPy, distributed under the BSD License
-- Python Image Library, distributed under its own license
+- [PyQT](https://wiki.python.org/moin/PyQt), distributed under the GNU General Public License v3
+- [NumPy](http://www.numpy.org/), distributed under the BSD License
+- [Python Image Library](http://www.pythonware.com/products/pil/), distributed under its own license
+
 These licenses are available in the RTLC\third-party-licenses directory.
 
 This product includes software written by Eric Young 
@@ -69,6 +70,12 @@ created by MedicalWP[1] and used under Creative Commons Attribution
 
 [1] http://www.iconarchive.com/artist/medicalwp.html
 [2] http://creativecommons.org/licenses/by/4.0/
+
+Contact
+-------
+
+Please email simon.lane -AT- soton.ac.uk if you wish to get in touch about
+the software.
 
 ------------------------------------------------------------------
 Copyright (C) University of Southampton, UK.
