@@ -27,7 +27,7 @@ installed along with its own Python 2.7 in the C:\RTLC
 directory, as a standalone installation separate from any other
 installations of these packages you may have.
 
-The installer was created using the Nullsoft Installer System
+The RTLC installer was created using the Nullsoft Installer System
 (NSIS) v3.0b3.
 
 You can find the source code for RTLC in the RTLC\dist
@@ -36,16 +36,31 @@ directory.
 This software is distributed under the GNU General Public
 License v3, a copy of which can be found in RTLC\LICENSE.txt.
 
-Installation
-------------
+The software can be obtained in either source code or installable
+form.
 
-1. Run the rtlc-setup-v0.1.exe installer and follow the
+Obtaining the source code
+-------------------------
+
+1. Create a RTLC directory in the C drive of the machine.
+2. Clone the [RTLC repository](https://www.github.com/SimonLane/RTLC.git) 
+   within that directory.
+3. Unpack the C:\RTLC\vendor\Python27-pyqt-numpy-pil.zip file, ensuring that
+   the pythonw.exe file can be found within the C:\RTLC\vendor\Python27
+   directory, and not within a further subdirectory.
+4. Run rtlc.bat from the C:\RTLC directory.
+
+Installation through Installer
+------------------------------
+
+1. Download the [RTLC installer](http://bit.ly/RTLCinstaller).
+2. Run the rtlc-setup-v0.1.exe installer and follow the
     instructions. RTLC will be installed to C:\RTLC.
-2. Follow the instructions given in the methods paper
+3. Follow the instructions given in the methods paper
     to set up the microscope's software
-3. Edit C:\RTLC\config.ini, inserting details for your
+4. Edit C:\RTLC\config.ini, inserting details for your
     microscope software configuration.
-4. Run RTLC from the Windows Start Menu.
+5. Run RTLC from the Windows Start Menu.
 
 Other Notes
 -----------
